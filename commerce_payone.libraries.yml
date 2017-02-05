@@ -1,0 +1,16 @@
+payone:
+  js:
+    "https://secure.pay1.de/client-api/js/ajax.js": { minified: false }
+
+form:
+  version: VERSION
+  css:
+    theme:
+      css/commerce_payone.form.css: {}
+  js:
+    js/commerce_payone.form.js: {}
+  dependencies:
+    - core/jquery
+    - core/drupal
+    - core/jquery.once
+    - commerce_payone/payone

@@ -1,0 +1,8 @@
+name: Commerce Payone
+type: module
+description: Provides the Payone payment methods for Drupal Commerce stores.
+core: 8.x
+package: Commerce (contrib)
+dependencies:
+  - commerce:commerce_payment
+
