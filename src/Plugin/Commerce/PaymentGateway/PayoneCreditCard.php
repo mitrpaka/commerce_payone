@@ -36,6 +36,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  *   credit_card_types = {
  *     "amex", "dinersclub", "discover", "jcb", "maestro", "mastercard", "visa",
  *   },
+ *   js_library = "commerce_payone/form",
  * )
  */
 class PayoneCreditCard extends OnsitePaymentGatewayBase implements PayoneCreditCardInterface {
