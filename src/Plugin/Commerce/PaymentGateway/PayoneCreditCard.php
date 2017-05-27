@@ -183,7 +183,7 @@ class PayoneCreditCard extends OnsitePaymentGatewayBase implements PayoneCreditC
     $payment->save();
 
     $owner = $payment_method->getOwner();
-    if ($owner) {
+    if ($owner && !$owner->isAnonymous()) {
       $owner->commerce_remote_id->setByProvider('commerce_payone', $response->userid);
       $owner->save();
     }
