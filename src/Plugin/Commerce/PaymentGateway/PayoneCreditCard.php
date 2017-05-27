@@ -156,7 +156,7 @@ class PayoneCreditCard extends OnsitePaymentGatewayBase implements PayoneCreditC
     if (empty($payment_method)) {
       throw new \InvalidArgumentException('The provided payment has no payment method referenced.');
     }
-    if (REQUEST_TIME >= $payment_method->getExpiresTime()) {
+    if ($payment_method->isExpired()) {
       throw new HardDeclineException('The provided payment method has expired');
     }
 
@@ -177,9 +177,11 @@ class PayoneCreditCard extends OnsitePaymentGatewayBase implements PayoneCreditC
       ErrorHelper::handleException($e);
     }
 
+    // Update the local payment entity.
+    $request_time = \Drupal::time()->getRequestTime();
     $payment->state = 'preauthorization';
     $payment->setRemoteId($response->txid);
-    $payment->setAuthorizedTime(REQUEST_TIME);
+    $payment->setAuthorizedTime($request_time);
     $payment->save();
 
     $owner = $payment_method->getOwner();
@@ -203,7 +205,7 @@ class PayoneCreditCard extends OnsitePaymentGatewayBase implements PayoneCreditC
         ErrorHelper::handleException($e);
       }
 
-      $payment->setCapturedTime(REQUEST_TIME);
+      $payment->setCapturedTime($request_time);
     }
 
     $payment->state = $capture ? 'capture_completed' : 'authorization';
@@ -232,9 +234,10 @@ class PayoneCreditCard extends OnsitePaymentGatewayBase implements PayoneCreditC
       ErrorHelper::handleException($e);
     }
 
+    // Update the local payment entity.
     $payment->state = 'capture_completed';
     $payment->setAmount($amount);
-    $payment->setCapturedTime(REQUEST_TIME);
+    $payment->setCapturedTime(\Drupal::time()->getRequestTime());
     $payment->save();
   }
 
