@@ -8,6 +8,7 @@ use Drupal\commerce_payment\PaymentTypeManager;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OffsitePaymentGatewayBase;
 use Drupal\commerce_payone\ErrorHelper;
 use Drupal\commerce_payone\PayoneApiServiceInterface;
+use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
@@ -36,8 +37,11 @@ class PayoneWallet extends OffsitePaymentGatewayBase {
    */
   protected $api;
 
-  public function __construct(array $configuration, $plugin_id, $plugin_definition, EntityTypeManagerInterface $entity_type_manager, PaymentTypeManager $payment_type_manager, PaymentMethodTypeManager $payment_method_type_manager, PayoneApiServiceInterface $apiService) {
-    parent::__construct($configuration, $plugin_id, $plugin_definition, $entity_type_manager, $payment_type_manager, $payment_method_type_manager);
+  /**
+   * {@inheritdoc}
+   */
+  public function __construct(array $configuration, $plugin_id, $plugin_definition, EntityTypeManagerInterface $entity_type_manager, PaymentTypeManager $payment_type_manager, PaymentMethodTypeManager $payment_method_type_manager, TimeInterface $time, PayoneApiServiceInterface $apiService) {
+    parent::__construct($configuration, $plugin_id, $plugin_definition, $entity_type_manager, $payment_type_manager, $payment_method_type_manager, $time);
 
     $this->api = $apiService;
   }
@@ -53,6 +57,7 @@ class PayoneWallet extends OffsitePaymentGatewayBase {
       $container->get('entity_type.manager'),
       $container->get('plugin.manager.commerce_payment_type'),
       $container->get('plugin.manager.commerce_payment_method_type'),
+      $container->get('datetime.time'),
       $container->get('commerce_payone.payment_api')
     );
   }
@@ -153,7 +158,7 @@ class PayoneWallet extends OffsitePaymentGatewayBase {
       'test' => $this->getMode() == 'test',
       'remote_id' => $remote_id, //$request->query->get('txn_id'),
       'remote_state' => $request->query->get('payment_status'),
-      'authorized' => REQUEST_TIME,
+      'authorized' => $this->time->getRequestTime(),
     ]);
     $payment->save();
   }
@@ -167,7 +172,7 @@ class PayoneWallet extends OffsitePaymentGatewayBase {
 
     $owner = $order->getCustomer();
     if ($owner) {
-      $customer_id = $owner->commerce_remote_id->getByProvider('commerce_payone');
+      $customer_id = $this->getRemoteCustomerId($owner);
       $customer_email = $owner->getEmail();
     }
 
@@ -207,7 +212,27 @@ class PayoneWallet extends OffsitePaymentGatewayBase {
 
     $request['wallettype'] = 'PPE';
 
-    return $this->api->processHttpPost($request);
+    $response = $this->api->processHttpPost($request);
+
+    // Extra operations on order and owner - using gateway API.
+    if ($response->status == 'REDIRECT') {
+      // Save params received from API call that need to be
+      // persisted until later payment creation in $order->data.
+      $order->setData('payone_wallet', [
+        'txid' => $response->txid,
+        'userid' => $response->userid
+      ]);
+      $order->save();
+
+      // Save customer information.
+      $owner = $order->getCustomer();
+      if ($owner) {
+        $this->setRemoteCustomerId($owner, $response->userid);
+        $owner->save();
+      }
+    }
+
+    return $response;
   }
 
   /**

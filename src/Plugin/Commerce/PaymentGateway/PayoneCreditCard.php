@@ -9,13 +9,13 @@ use Drupal\commerce_payment\CreditCard;
 use Drupal\commerce_payment\Entity\PaymentInterface;
 use Drupal\commerce_payment\Entity\PaymentMethodInterface;
 use Drupal\commerce_payment\Exception\HardDeclineException;
-use Drupal\commerce_payment\Exception\InvalidRequestException;
 use Drupal\commerce_payment\PaymentMethodTypeManager;
 use Drupal\commerce_payment\PaymentTypeManager;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OnsitePaymentGatewayBase;
 use Drupal\commerce_payone\ErrorHelper;
 use Drupal\commerce_payone\PayoneApiServiceInterface;
 use Drupal\commerce_price\Price;
+use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
@@ -51,8 +51,8 @@ class PayoneCreditCard extends OnsitePaymentGatewayBase implements PayoneCreditC
   /**
    * {@inheritdoc}
    */
-  public function __construct(array $configuration, $plugin_id, $plugin_definition, EntityTypeManagerInterface $entity_type_manager, PaymentTypeManager $payment_type_manager, PaymentMethodTypeManager $payment_method_type_manager, PayoneApiServiceInterface $apiService) {
-    parent::__construct($configuration, $plugin_id, $plugin_definition, $entity_type_manager, $payment_type_manager, $payment_method_type_manager);
+  public function __construct(array $configuration, $plugin_id, $plugin_definition, EntityTypeManagerInterface $entity_type_manager, PaymentTypeManager $payment_type_manager, PaymentMethodTypeManager $payment_method_type_manager, TimeInterface $time, PayoneApiServiceInterface $apiService) {
+    parent::__construct($configuration, $plugin_id, $plugin_definition, $entity_type_manager, $payment_type_manager, $payment_method_type_manager, $time);
 
     // You can create an instance of the SDK here and assign it to $this->api.
     // Or inject Guzzle when there's no suitable SDK.
@@ -70,6 +70,7 @@ class PayoneCreditCard extends OnsitePaymentGatewayBase implements PayoneCreditC
       $container->get('entity_type.manager'),
       $container->get('plugin.manager.commerce_payment_type'),
       $container->get('plugin.manager.commerce_payment_method_type'),
+      $container->get('datetime.time'),
       $container->get('commerce_payone.payment_api')
     );
   }
@@ -149,16 +150,9 @@ class PayoneCreditCard extends OnsitePaymentGatewayBase implements PayoneCreditC
    * {@inheritdoc}
    */
   public function createPayment(PaymentInterface $payment, $capture = TRUE) {
-    if ($payment->getState()->value != 'new') {
-      throw new \InvalidArgumentException('The provided payment is in an invalid state.');
-    }
+    $this->assertPaymentState($payment, ['new']);
     $payment_method = $payment->getPaymentMethod();
-    if (empty($payment_method)) {
-      throw new \InvalidArgumentException('The provided payment has no payment method referenced.');
-    }
-    if ($payment_method->isExpired()) {
-      throw new HardDeclineException('The provided payment method has expired');
-    }
+    $this->assertPaymentMethod($payment_method);
 
     /** @var \Drupal\address\Plugin\Field\FieldType\AddressItem $billing_address */
     if ($billing_address = $payment_method->getBillingProfile()) {
@@ -179,14 +173,13 @@ class PayoneCreditCard extends OnsitePaymentGatewayBase implements PayoneCreditC
 
     // Update the local payment entity.
     $request_time = \Drupal::time()->getRequestTime();
-    $payment->state = 'preauthorization';
+    $payment->setState('preauthorization');
     $payment->setRemoteId($response->txid);
-    $payment->setAuthorizedTime($request_time);
     $payment->save();
 
     $owner = $payment_method->getOwner();
     if ($owner && !$owner->isAnonymous()) {
-      $owner->commerce_remote_id->setByProvider('commerce_payone', $response->userid);
+      $this->setRemoteCustomerId($owner, $response->userid);
       $owner->save();
     }
 
@@ -204,11 +197,10 @@ class PayoneCreditCard extends OnsitePaymentGatewayBase implements PayoneCreditC
       catch (Exception $e) {
         ErrorHelper::handleException($e);
       }
-
-      $payment->setCapturedTime($request_time);
     }
 
-    $payment->state = $capture ? 'capture_completed' : 'authorization';
+    $payment_state = $capture ? 'completed' : 'authorization';
+    $payment->setState($payment_state);
     $payment->save();
   }
 
@@ -216,9 +208,7 @@ class PayoneCreditCard extends OnsitePaymentGatewayBase implements PayoneCreditC
    * {@inheritdoc}
    */
   public function capturePayment(PaymentInterface $payment, Price $amount = NULL) {
-    if (!in_array($payment->getState()->value, ['preauthorization', 'authorization'])) {
-      throw new \InvalidArgumentException('Only payments in the "preauthorization" and "authorization" state can be captured.');
-    }
+    $this->assertPaymentState($payment, ['preauthorization', 'authorization']);
     // If not specified, capture the entire amount.
     $amount = $amount ?: $payment->getAmount();
 
@@ -235,9 +225,8 @@ class PayoneCreditCard extends OnsitePaymentGatewayBase implements PayoneCreditC
     }
 
     // Update the local payment entity.
-    $payment->state = 'capture_completed';
+    $payment->setState('completed');
     $payment->setAmount($amount);
-    $payment->setCapturedTime(\Drupal::time()->getRequestTime());
     $payment->save();
   }
 
@@ -245,9 +234,7 @@ class PayoneCreditCard extends OnsitePaymentGatewayBase implements PayoneCreditC
    * {@inheritdoc}
    */
   public function voidPayment(PaymentInterface $payment) {
-    if ($payment->getState()->value != 'authorization') {
-      throw new \InvalidArgumentException('Only payments in the "authorization" state can be voided.');
-    }
+    $this->assertPaymentState($payment, ['authorization']);
 
     // Perform the void request here, throw an exception if it fails.
     // See \Drupal\commerce_payment\Exception for the available exceptions.
@@ -257,16 +244,11 @@ class PayoneCreditCard extends OnsitePaymentGatewayBase implements PayoneCreditC
    * {@inheritdoc}
    */
   public function refundPayment(PaymentInterface $payment, Price $amount = NULL) {
-    if (!in_array($payment->getState()->value, ['capture_completed', 'capture_partially_refunded'])) {
-      throw new \InvalidArgumentException('Only payments in the "capture_completed" and "capture_partially_refunded" states can be refunded.');
-    }
+    $this->assertPaymentState($payment, ['completed', 'partially_refunded']);
     // If not specified, refund the entire amount.
     $amount = $amount ?: $payment->getAmount();
     // Validate the requested amount.
-    $balance = $payment->getBalance();
-    if ($amount->greaterThan($balance)) {
-      throw new InvalidRequestException(sprintf("Can't refund more than %s.", $balance->__toString()));
-    }
+    $this->assertRefundAmount($payment, $amount);
 
     // Perform the refund request here, throw an exception if it fails.
     // See \Drupal\commerce_payment\Exception for the available exceptions.
@@ -283,10 +265,10 @@ class PayoneCreditCard extends OnsitePaymentGatewayBase implements PayoneCreditC
     $old_refunded_amount = $payment->getRefundedAmount();
     $new_refunded_amount = $old_refunded_amount->add($amount);
     if ($new_refunded_amount->lessThan($payment->getAmount())) {
-      $payment->state = 'capture_partially_refunded';
+      $payment->setState('partially_refunded');
     }
     else {
-      $payment->state = 'capture_refunded';
+      $payment->setState('refunded');
     }
 
     $payment->setRefundedAmount($new_refunded_amount);
@@ -376,7 +358,7 @@ class PayoneCreditCard extends OnsitePaymentGatewayBase implements PayoneCreditC
 
     $owner = $payment_method->getOwner();
     if ($owner) {
-      $customer_id = $owner->commerce_remote_id->getByProvider('commerce_payone');
+      $customer_id = $this->getRemoteCustomerId($owner);
       $customer_email = $owner->getEmail();
     }
 
@@ -455,7 +437,8 @@ class PayoneCreditCard extends OnsitePaymentGatewayBase implements PayoneCreditC
       $this->capturePayment($payment);
     }
 
-    $payment->state = $capture ? 'capture_completed' : 'authorization';
+    $payment_state = $capture ? 'completed' : 'authorization';
+    $payment->setState($payment_state);
     $payment->save();
   }
 

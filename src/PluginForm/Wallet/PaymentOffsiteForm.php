@@ -33,18 +33,6 @@ class PaymentOffsiteForm extends BasePaymentOffsiteForm {
       if ($response->status == 'REDIRECT') {
         $redirect_url = $response->redirecturl;
 
-        // Save params received from API call that need to be
-        // persisted until later payment creation in $order->data.
-        $order->setData('payone_wallet', ['txid' => $response->txid, 'userid' => $response->userid]);
-        $order->save();
-
-        // Save customer information.
-        $owner = $order->getCustomer();
-        if ($owner) {
-          $owner->commerce_remote_id->setByProvider('commerce_payone', $response->userid);
-          $owner->save();
-        }
-
         $form = $this->buildRedirectForm($form, $form_state, $redirect_url, [], 'post');
       }
       else {
