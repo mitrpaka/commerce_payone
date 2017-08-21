@@ -36,7 +36,20 @@ class PaymentOffsiteForm extends BasePaymentOffsiteForm {
         $form = $this->buildRedirectForm($form, $form_state, $redirect_url, [], 'post');
       }
       else {
-        throw new \InvalidArgumentException('Preauthorization of the payment failed.');
+        $data = [
+          'status' => $response->status,
+          'errorcode' => $response->errorcode,
+          'errormessage' => $response->errormessage,
+          'customermessage' => $response->customermessage,
+        ];
+        \Drupal::logger('commerce_payone')->error('Payone e-wallet preauthorization failed: %errorMsg [%errorCode]',
+          [
+            '%errorMsg' => $response->customermessage,
+            '%errorCode' => $response->errorcode,
+          ]
+        );
+        $redirect_url = $payment_gateway_plugin->getReturnUrl($order, 'commerce_payment.checkout.cancel');
+        return $this->buildRedirectForm($form, $form_state, $redirect_url, $data, 'post');
       }
     }
     catch (\Exception $e) {

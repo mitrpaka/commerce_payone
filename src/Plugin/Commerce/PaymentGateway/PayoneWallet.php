@@ -164,6 +164,18 @@ class PayoneWallet extends OffsitePaymentGatewayBase {
   }
 
   /**
+   * {@inheritdoc}
+   */
+  public function onCancel(OrderInterface $order, Request $request) {
+    if ($request->request->get('status') == 'ERROR') {
+      drupal_set_message($request->request->get('customermessage'), 'error');
+    }
+    else {
+      parent::onCancel($order, $request);
+    }
+  }
+
+  /**
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    * @return mixed
    */
@@ -237,24 +249,11 @@ class PayoneWallet extends OffsitePaymentGatewayBase {
 
   /**
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   * @return mixed
-   */
-  protected function requestCapture(OrderInterface $order) {
-    $request = $this->api->getServerApiStandardParameters($this->configuration, 'capture');
-    $request['amount'] = round($order->getTotalPrice()->getNumber(), 2) * 100;
-    $request['currency'] = $order->getTotalPrice()->getCurrencyCode();
-    $request['txid'] = $order->getData('payone_wallet')['txid'];
-
-    return $this->api->processHttpPost($request, FALSE);
-  }
-
-  /**
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
    * @param $type
    * @param string $step
    * @return \Drupal\Core\GeneratedUrl|string
    */
-  protected function getReturnUrl(OrderInterface $order, $type, $step = 'payment') {
+  public function getReturnUrl(OrderInterface $order, $type, $step = 'payment') {
     $arguments = [
       'commerce_order' => $order->id(),
       'step' => $step,
@@ -265,6 +264,19 @@ class PayoneWallet extends OffsitePaymentGatewayBase {
     ]);
 
     return $url->toString();
+  }
+
+  /**
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   * @return mixed
+   */
+  protected function requestCapture(OrderInterface $order) {
+    $request = $this->api->getServerApiStandardParameters($this->configuration, 'capture');
+    $request['amount'] = round($order->getTotalPrice()->getNumber(), 2) * 100;
+    $request['currency'] = $order->getTotalPrice()->getCurrencyCode();
+    $request['txid'] = $order->getData('payone_wallet')['txid'];
+
+    return $this->api->processHttpPost($request, FALSE);
   }
 
 }
