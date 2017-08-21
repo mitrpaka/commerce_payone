@@ -60,15 +60,11 @@ class ErrorHelper {
     // Payone API error messages are documented in section
     // 5.7 Error messages (Technical reference, Client or Server API).
     // Validation errors can be due to a module error (mapped to
-    // PaymentGatewayException or InvalidRequestException) or due to a user input
-    // error (mapped to a HardDeclineException).
-    $hard_decline_codes = [];
-    $payment_gateway_codes = [911, 1073];
+    // InvalidRequestException) or due to a user input error (mapped to
+    // a HardDeclineException).
+    $hard_decline_codes = [1, 2, 4, 5, 7, 12, 13, 14, 30, 31, 34, 43, 56, 62, 701, 702, 722, 732];
     if (in_array($result->errorcode, $hard_decline_codes)) {
       throw new HardDeclineException($result->customermessage, $result->errorcode);
-    }
-    elseif (in_array($result->errorcode, $payment_gateway_codes)) {
-      throw new PaymentGatewayException($result->customermessage, $result->errorcode);
     }
     else {
       throw new InvalidRequestException($result->customermessage, $result->errorcode);
