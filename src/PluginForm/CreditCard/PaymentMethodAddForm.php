@@ -90,7 +90,6 @@ class PaymentMethodAddForm extends BasePaymentMethodAddForm {
         'O' => t('Maestro International'),
         'U' => t('Maestro UK'),
         'C' => t('Discover'),
-        'B' => t('Carte Bleue')
       ),
       '#attributes' => [
         'id' => ['cardtype'],

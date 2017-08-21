@@ -323,7 +323,7 @@ class PayoneCreditCard extends OnsitePaymentGatewayBase implements PayoneCreditC
    * Maps the Payone credit card type to a Commerce credit card type.
    *
    * @param string $card_type
-   *   The Braintree credit card type.
+   *   The Payone credit card type.
    *
    * @return string
    *   The Commerce credit card type.
@@ -333,12 +333,11 @@ class PayoneCreditCard extends OnsitePaymentGatewayBase implements PayoneCreditC
       'V' => 'visa',
       'M' => 'mastercard',
       'A' => 'amex',
-      'D' => 'diners',
-      'J' => 'JCB',
-      'O' => 'maestro_international',
-      'U' => 'maestro_UK',
+      'D' => 'dinersclub',
+      'J' => 'jcb',
+      'O' => 'maestro',
+      'U' => 'maestro',
       'C' => 'discover',
-      'B' => 'carte_bleue',
     ];
     if (!isset($map[$card_type])) {
       throw new HardDeclineException(sprintf('Unsupported credit card type "%s".', $card_type));
