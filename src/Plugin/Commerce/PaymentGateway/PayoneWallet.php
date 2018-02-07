@@ -183,7 +183,7 @@ class PayoneWallet extends OffsitePaymentGatewayBase {
     $customer_id = $customer_email = NULL;
 
     $owner = $order->getCustomer();
-    if ($owner) {
+    if ($owner && $owner->isAuthenticated()) {
       $customer_id = $this->getRemoteCustomerId($owner);
       $customer_email = $owner->getEmail();
     }
@@ -238,7 +238,7 @@ class PayoneWallet extends OffsitePaymentGatewayBase {
 
       // Save customer information.
       $owner = $order->getCustomer();
-      if ($owner) {
+      if ($owner && $owner->isAuthenticated()) {
         $this->setRemoteCustomerId($owner, $response->userid);
         $owner->save();
       }
