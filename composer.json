@@ -2,7 +2,7 @@
   "name": "drupal/commerce_payone",
   "type": "drupal-module",
   "description": "Provides Commerce integration for Payone Payments.",
-  "homepage": "http://drupal.org/project/commerce_payone",
+  "homepage": "https://www.drupal.org/sandbox/mitrpaka/2849906",
   "license": "GPL-2.0+",
   "require": {}
 }
