@@ -48,10 +48,7 @@ CONFIGURATION
   - Portal ID
   - Sub-Account ID
   - PAYONE Key
-  - Reference prefix
   Use the API credentials provided by your Payone merchant account.
-  Reference prefix is for testing purposes only, to prevent duplicate reference
-  errors (References needs to be unique).
 
 * To enable 3-D Secure checking for credit card payments, please activate
   3-D Secure check from PAYONE Merchant Interface.

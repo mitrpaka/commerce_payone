@@ -85,7 +85,6 @@ class PayoneCreditCard extends OnsitePaymentGatewayBase implements PayoneCreditC
       'payone_portal_id' => '',
       'payone_sub_account_id' => '',
       'payone_key' => '',
-      'payone_reference_prefix' => '',
     ] + parent::defaultConfiguration();
   }
 
@@ -119,13 +118,6 @@ class PayoneCreditCard extends OnsitePaymentGatewayBase implements PayoneCreditC
       '#default_value' => $this->configuration['payone_key'],
     ];
 
-    $form['payone_reference_prefix'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Reference prefix'),
-      '#description' => $this->t('Set a reference prefix. This option is for testing purposes only, to prevent dublicate reference errors.'),
-      '#default_value' => $this->configuration['payone_reference_prefix'],
-    ];
-
     return $form;
   }
 
@@ -137,12 +129,11 @@ class PayoneCreditCard extends OnsitePaymentGatewayBase implements PayoneCreditC
 
     if (!$form_state->getErrors()) {
       $values = $form_state->getValue($form['#parents']);
-      $this->configuration['payone_mode'] = $this->getMode(); //$values['payone_mode'];
+      $this->configuration['payone_mode'] = $this->getMode();
       $this->configuration['payone_merchant_id'] = $values['payone_merchant_id'];
       $this->configuration['payone_portal_id'] = $values['payone_portal_id'];
       $this->configuration['payone_sub_account_id'] = $values['payone_sub_account_id'];
       $this->configuration['payone_key'] = $values['payone_key'];
-      $this->configuration['payone_reference_prefix'] = $values['payone_reference_prefix'];
     }
   }
 
@@ -172,7 +163,6 @@ class PayoneCreditCard extends OnsitePaymentGatewayBase implements PayoneCreditC
     }
 
     // Update the local payment entity.
-    $request_time = \Drupal::time()->getRequestTime();
     $payment->setState('preauthorization');
     $payment->setRemoteId($response->txid);
     $payment->save();
@@ -364,7 +354,8 @@ class PayoneCreditCard extends OnsitePaymentGatewayBase implements PayoneCreditC
     $request = $this->api->getClientApiStandardParameters($this->configuration, 'preauthorization');
     $request['aid'] = $this->configuration['payone_sub_account_id'];
     $request['clearingtype'] = 'cc';
-    $request['reference'] = $this->configuration['payone_reference_prefix'] . $payment->getOrderId();
+    // Reference must be unique.
+    $request['reference'] = $payment->getOrderId() . '_' . $this->time->getCurrentTime();
     $request['amount'] = round($payment->getAmount()->getNumber(), 2) * 100;
     $request['currency'] = $payment->getAmount()->getCurrencyCode();
     if ($customer_id) {

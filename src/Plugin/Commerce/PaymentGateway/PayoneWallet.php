@@ -72,7 +72,6 @@ class PayoneWallet extends OffsitePaymentGatewayBase {
       'payone_portal_id' => '',
       'payone_sub_account_id' => '',
       'payone_key' => '',
-      'payone_reference_prefix' => '',
     ] + parent::defaultConfiguration();
   }
 
@@ -106,13 +105,6 @@ class PayoneWallet extends OffsitePaymentGatewayBase {
       '#default_value' => $this->configuration['payone_key'],
     ];
 
-    $form['payone_reference_prefix'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Reference prefix'),
-      '#description' => $this->t('Set a reference prefix. This option is for testing purposes only, to prevent dublicate reference errors.'),
-      '#default_value' => $this->configuration['payone_reference_prefix'],
-    ];
-
     return $form;
   }
 
@@ -129,7 +121,6 @@ class PayoneWallet extends OffsitePaymentGatewayBase {
       $this->configuration['payone_portal_id'] = $values['payone_portal_id'];
       $this->configuration['payone_sub_account_id'] = $values['payone_sub_account_id'];
       $this->configuration['payone_key'] = $values['payone_key'];
-      $this->configuration['payone_reference_prefix'] = $values['payone_reference_prefix'];
     }
   }
 
@@ -156,7 +147,7 @@ class PayoneWallet extends OffsitePaymentGatewayBase {
       'payment_gateway' => $this->entityId,
       'order_id' => $order->id(),
       'test' => $this->getMode() == 'test',
-      'remote_id' => $remote_id, //$request->query->get('txn_id'),
+      'remote_id' => $remote_id,
       'remote_state' => $request->query->get('payment_status'),
       'authorized' => $this->time->getRequestTime(),
     ]);
@@ -191,7 +182,8 @@ class PayoneWallet extends OffsitePaymentGatewayBase {
     $request = $this->api->getClientApiStandardParameters($this->configuration, 'preauthorization');
     $request['aid'] = $this->configuration['payone_sub_account_id'];
     $request['clearingtype'] = 'wlt';
-    $request['reference'] = $this->configuration['payone_reference_prefix'] . $order->id();
+    // Reference must be unique.
+    $request['reference'] = $order->id() . '_' . $this->time->getCurrentTime();
     $request['amount'] = round($order->getTotalPrice()->getNumber(), 2) * 100;
     $request['currency'] = $order->getTotalPrice()->getCurrencyCode();
     if ($customer_id) {

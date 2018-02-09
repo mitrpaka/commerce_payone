@@ -16,6 +16,3 @@ commerce_payment.commerce_payment_gateway.plugin.payone:
     payone_key:
       type: string
       label: 'PAYONE Key'
-    payone_reference_prefix:
-      type: string
-      label: 'Reference prefix'
