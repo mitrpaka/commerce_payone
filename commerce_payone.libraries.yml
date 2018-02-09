@@ -10,6 +10,7 @@ form:
   js:
     js/commerce_payone.form.js: {}
   dependencies:
+    - classy/messages
     - core/jquery
     - core/drupal
     - core/jquery.once
